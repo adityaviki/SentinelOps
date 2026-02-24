@@ -5,6 +5,7 @@ import signal
 import sys
 
 import structlog
+import uvicorn
 from dotenv import load_dotenv
 
 from sentinelops.analyzer import IncidentAnalyzer
@@ -17,6 +18,7 @@ from sentinelops.integrations.elasticsearch import ElasticsearchClient
 from sentinelops.integrations.pagerduty import PagerDutyNotifier
 from sentinelops.integrations.slack import SlackNotifier
 from sentinelops.runbooks import RunbookSearch
+from sentinelops.store import incident_store
 from sentinelops.utils.logging import setup_logging
 
 logger = structlog.get_logger(__name__)
@@ -78,7 +80,7 @@ class SentinelOps:
         self._running = False
 
     async def _tick(self) -> None:
-        """Single detection → correlation → analysis → incident → notify cycle."""
+        """Single detection -> correlation -> analysis -> incident -> notify cycle."""
         try:
             # 1. Detect anomalies
             anomalies = await self.detector.detect()
@@ -105,7 +107,10 @@ class SentinelOps:
             if incident is None:
                 return
 
-            # 6. Dispatch notifications
+            # 6. Store for dashboard
+            incident_store.add(incident)
+
+            # 7. Dispatch notifications
             await self._notify(incident)
 
         except Exception:
@@ -135,7 +140,18 @@ async def run(config_path: str = "config.yaml") -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, app.stop)
 
-    await app.start()
+    # Start API server and polling loop concurrently
+    from sentinelops.api import app as api_app
+
+    api_config = uvicorn.Config(api_app, host="0.0.0.0", port=8000, log_level="warning")
+    api_server = uvicorn.Server(api_config)
+
+    logger.info("sentinelops.dashboard", url="http://localhost:8000")
+
+    await asyncio.gather(
+        app.start(),
+        api_server.serve(),
+    )
 
 
 def cli_entry() -> None:
