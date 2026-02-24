@@ -1,0 +1,67 @@
+[
+  {
+    "title": "Payment Service Timeout Storm (2025-09)",
+    "incident_date": "2025-09-15T14:30:00Z",
+    "services_affected": ["payment-service", "order-service", "gateway"],
+    "root_cause": "Connection pool exhaustion in payment-service caused cascading timeouts to upstream services. The database connection pool max was set to 10, insufficient under peak load.",
+    "resolution_steps": [
+      "Increase database connection pool max from 10 to 50",
+      "Add circuit breaker between order-service and payment-service",
+      "Configure connection pool monitoring alerts",
+      "Add graceful degradation: queue payments when pool is saturated"
+    ],
+    "tags": ["latency_p99", "error_rate", "timeout", "connection_pool", "cascading_failure"]
+  },
+  {
+    "title": "Auth Service Memory Leak (2025-07)",
+    "incident_date": "2025-07-22T03:15:00Z",
+    "services_affected": ["auth-service"],
+    "root_cause": "JWT token cache was not bounded, growing indefinitely until OOM kill. Service restarted every ~6 hours under load.",
+    "resolution_steps": [
+      "Add LRU eviction policy to JWT cache with max 10,000 entries",
+      "Set memory limits in container spec (512Mi request, 1Gi limit)",
+      "Add memory usage alerts at 80% and 90% thresholds",
+      "Deploy canary and monitor memory growth over 24 hours"
+    ],
+    "tags": ["memory_usage", "oom", "auth", "cache", "memory_leak"]
+  },
+  {
+    "title": "Search Index Lag Causing Stale Results (2025-11)",
+    "incident_date": "2025-11-03T09:45:00Z",
+    "services_affected": ["search-service", "indexer-service", "product-catalog"],
+    "root_cause": "Elasticsearch indexing queue backed up after a bulk product import. Indexer was single-threaded and couldn't keep up with 50k doc/min ingestion rate.",
+    "resolution_steps": [
+      "Scale indexer to 3 replicas with parallel bulk indexing",
+      "Add backpressure: pause imports when queue depth exceeds 100k",
+      "Monitor index lag metric (current vs latest sequence number)",
+      "Set up alert when lag exceeds 5 minutes"
+    ],
+    "tags": ["latency_p95", "search", "indexing", "queue_backlog"]
+  },
+  {
+    "title": "API Gateway 5xx Spike from Rate Limiter Bug (2025-08)",
+    "incident_date": "2025-08-10T16:20:00Z",
+    "services_affected": ["gateway", "rate-limiter"],
+    "root_cause": "Rate limiter Redis key expiry was set to 0 instead of 60s after a config deploy. All requests after the first were rejected as 429, returned as 503 by gateway.",
+    "resolution_steps": [
+      "Fix rate limiter config: set window_seconds=60 (was 0)",
+      "Add integration test that validates rate limiter allows N requests in window",
+      "Add config validation that rejects window_seconds < 1",
+      "Implement rate limiter bypass for health check endpoints"
+    ],
+    "tags": ["error_rate", "5xx", "rate_limiter", "config_error", "gateway"]
+  },
+  {
+    "title": "CPU Spike from Runaway Cron Job (2025-10)",
+    "incident_date": "2025-10-28T02:00:00Z",
+    "services_affected": ["analytics-service", "reporting-worker"],
+    "root_cause": "Nightly analytics aggregation query had O(n^2) complexity after schema migration. With 10M rows, it consumed 100% CPU for 3 hours, starving the reporting worker.",
+    "resolution_steps": [
+      "Optimize aggregation query: add covering index on (date, metric_type)",
+      "Set query timeout to 30 minutes with automatic kill",
+      "Move heavy analytics to dedicated read replica",
+      "Add CPU usage anomaly alert for batch job pods"
+    ],
+    "tags": ["cpu_usage", "cron", "analytics", "query_performance", "resource_exhaustion"]
+  }
+]

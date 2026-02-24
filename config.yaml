@@ -1,0 +1,37 @@
+polling:
+  interval_seconds: 30
+  lookback_minutes: 5
+
+detection:
+  # Z-score thresholds for severity levels
+  thresholds:
+    p1: 5.0
+    p2: 3.5
+    p3: 2.5
+    p4: 2.0
+  # Rolling window for baseline statistics
+  baseline_window_minutes: 60
+  # Minimum data points required to compute a reliable baseline
+  min_data_points: 10
+
+correlation:
+  # Time window around the anomaly to search for related events
+  window_minutes: 10
+  # Maximum correlated events to include in analysis
+  max_events: 50
+
+incidents:
+  # Cooldown before re-alerting for the same (service, metric, severity)
+  dedup_cooldown_minutes: 30
+  # Only page PagerDuty for these severities
+  pagerduty_severities: ["P1", "P2"]
+
+elasticsearch:
+  # Index patterns to monitor
+  log_index: "app-logs-all"
+  metrics_index: "app-metrics-*"
+  runbook_index: "incident-runbooks"
+
+analyzer:
+  model: "claude-sonnet-4-6"
+  max_tokens: 1024
